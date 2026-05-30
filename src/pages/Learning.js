@@ -5,6 +5,9 @@ import {
   Lock, Menu, X, ArrowRight, ArrowLeftCircle, Award, Sparkles
 } from 'lucide-react';
 
+// 🔧 URL absolue de l'API Render
+const API_BASE = 'https://grow-platform.onrender.com/api';
+
 function Learning() {
   const { courseId } = useParams();
   const navigate = useNavigate();
@@ -31,13 +34,14 @@ function Learning() {
   useEffect(() => {
     setLoading(true);
     const fetchModules = async () => {
-      const response = await fetch(`/api/courses/${courseId}/modules`);
+      // ✅ Utilisation de l'URL absolue
+      const response = await fetch(`${API_BASE}/courses/${courseId}/modules`);
       if (!response.ok) throw new Error('Erreur réseau');
       return response.json();
     };
 
     Promise.all([
-      fetch(`/api/courses/${courseId}`).then(r => r.json()),
+      fetch(`${API_BASE}/courses/${courseId}`).then(r => r.json()),
       fetchModules()
     ])
     .then(([courseData, modulesData]) => {
@@ -72,9 +76,7 @@ function Learning() {
   const isUnlocked = (lessonId) => {
     const idx = allLessons.findIndex(l => l.id === lessonId);
     if (idx === -1) return false;
-    // La première leçon est toujours débloquée
     if (idx === 0) return true;
-    // Toutes les leçons précédentes doivent être complétées
     for (let i = 0; i < idx; i++) {
       if (!completedLessons[allLessons[i].id]) return false;
     }
@@ -95,7 +97,6 @@ function Learning() {
     const idx = allLessons.findIndex(l => l.id === selectedLesson.id);
     if (idx < allLessons.length - 1) {
       const next = allLessons[idx + 1];
-      // Ouvrir le module parent si nécessaire
       setExpandedModules(p => ({ ...p, [next.moduleId]: true }));
       setSelectedLesson(next);
     }
@@ -205,7 +206,6 @@ function Learning() {
                       {expandedModules[m.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </div>
                     {expandedModules[m.id] && (m.lessons || []).map(l => {
-                      const lessonData = allLessons.find(al => al.id === l.id);
                       const unlocked = isUnlocked(l.id);
                       return (
                         <div key={l.id}
