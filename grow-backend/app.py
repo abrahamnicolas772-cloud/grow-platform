@@ -1,0 +1,36 @@
+from flask import Flask, jsonify
+from flask_cors import CORS
+from models import db, bcrypt
+from routes.users import users_bp
+from routes.courses import courses_bp
+from routes.quiz import quiz_bp
+from routes.assignments import assignments_bp
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = Flask(__name__)
+CORS(app, origins=['https://grow-platform-pink.vercel.app', 'http://localhost:3000'])
+
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://user:pass@localhost/grow')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
+
+db.init_app(app)
+bcrypt.init_app(app)
+
+# Blueprints
+app.register_blueprint(users_bp, url_prefix='/api')
+app.register_blueprint(courses_bp, url_prefix='/api')
+app.register_blueprint(quiz_bp, url_prefix='/api/quiz')
+app.register_blueprint(assignments_bp, url_prefix='/api/assignments')
+
+@app.route('/api/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok'})
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, port=5000)

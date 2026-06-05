@@ -1,0 +1,128 @@
+import { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
+import api from '../services/api';
+
+function Learning() {
+  const { courseId } = useParams();
+  const [course, setCourse] = useState(null);
+  const [modules, setModules] = useState([]);
+  const [selectedLesson, setSelectedLesson] = useState(null);
+  const [expandedModules, setExpandedModules] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setLoading(true);
+    // Appels API sécurisés : si l'un échoue, il renvoie une valeur par défaut
+    Promise.all([
+      api.getCourse(courseId).catch(() => ({ data: null })),
+      api.getCourseModules(courseId).catch(() => ({ data: [] }))
+    ])
+      .then(([courseRes, modulesRes]) => {
+        setCourse(courseRes?.data || null);
+
+        // Transformation blindée de la réponse en tableau
+        const raw = modulesRes?.data;
+        let mods = [];
+        if (Array.isArray(raw)) {
+          mods = raw;
+        } else if (raw && typeof raw === 'object' && Array.isArray(raw.modules)) {
+          mods = raw.modules;
+        }
+
+        setModules(mods);
+
+        // Ouvrir automatiquement le premier module
+        if (mods.length > 0) {
+          const first = mods[0];
+          setExpandedModules({ [first.id]: true });
+          if (first.lessons && first.lessons.length > 0) {
+            setSelectedLesson(first.lessons[0]);
+          }
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        setError('Erreur de chargement du cours.');
+        setLoading(false);
+      });
+  }, [courseId]);
+
+  const toggleModule = (id) =>
+    setExpandedModules((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  const pageStyle = {
+    minHeight: '100vh',
+    padding: '80px 20px',
+    background: '#0a0a0f',
+    color: 'white',
+    fontFamily: 'Inter, sans-serif',
+  };
+
+  if (loading) return <div style={pageStyle}>Chargement…</div>;
+  if (error) return <div style={pageStyle}><h2>{error}</h2><Link to="/dashboard" style={{ color: '#60a5fa' }}>← Dashboard</Link></div>;
+
+  return (
+    <div style={pageStyle}>
+      <h1>{course?.title || 'Cours'}</h1>
+      <Link to="/dashboard" style={{ color: '#60a5fa' }}>
+        <ArrowLeft size={14} /> Dashboard
+      </Link>
+
+      <div style={{ marginTop: '20px' }}>
+        {modules.length === 0 ? (
+          <p>Aucun module trouvé pour ce cours.</p>
+        ) : (
+          modules.map((m) => (
+            <div
+              key={m.id || Math.random()}
+              style={{ background: '#1e293b', borderRadius: '8px', marginBottom: '10px', padding: '10px' }}
+            >
+              <div
+                onClick={() => toggleModule(m.id)}
+                style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <h3 style={{ margin: 0 }}>{m.title}</h3>
+                <span>{expandedModules[m.id] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
+              </div>
+              {expandedModules[m.id] && (
+                <div style={{ marginTop: '10px', paddingLeft: '20px' }}>
+                  {Array.isArray(m.lessons) &&
+                    m.lessons.map((l) => (
+                      <div
+                        key={l.id || Math.random()}
+                        onClick={() => setSelectedLesson(l)}
+                        style={{
+                          padding: '8px',
+                          margin: '4px 0',
+                          cursor: 'pointer',
+                          background:
+                            selectedLesson?.id === l.id ? 'rgba(59,130,246,0.3)' : 'rgba(0,0,0,0.2)',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        📄 {l.title} ({l.duration || 0} min)
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {selectedLesson && (
+        <div style={{ marginTop: '20px', padding: '20px', background: '#111827', borderRadius: '8px' }}>
+          <h2>{selectedLesson.title}</h2>
+          <div
+            style={{ marginTop: '10px', lineHeight: '1.6' }}
+            dangerouslySetInnerHTML={{ __html: selectedLesson.content || 'Aucun contenu.' }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default Learning;

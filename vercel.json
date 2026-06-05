@@ -1,0 +1,9 @@
+{
+  "buildCommand": "cd grow-frontend && npm install --legacy-peer-deps && npm run build",
+  "outputDirectory": "grow-frontend/build",
+  "installCommand": "npm install --legacy-peer-deps",
+  "framework": "create-react-app",
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/grow-frontend/build/index.html" }
+  ]
+}
