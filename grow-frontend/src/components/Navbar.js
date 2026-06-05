@@ -95,7 +95,7 @@ function Navbar() {
   const navStyle = {
     position: 'sticky',
     top: 0,
-    zIndex: 1000,
+    zIndex: 900,
     background: isScrolled ? 'white' : 'white',
     boxShadow: isScrolled ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
     padding: '0.6rem 2rem',
@@ -114,7 +114,7 @@ function Navbar() {
   };
 
   const logoImageStyle = {
-    height: '55px',
+    height: '100px',
     width: 'auto',
   };
 
