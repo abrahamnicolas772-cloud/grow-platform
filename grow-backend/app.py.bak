@@ -1,0 +1,287 @@
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
+from dotenv import load_dotenv
+import os
+import json
+from datetime import datetime, timedelta
+
+load_dotenv()
+
+app = Flask(__name__)
+CORS(app)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///grow.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
+
+db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
+
+# ========== MODÈLES ==========
+class User(db.Model):
+    __tablename__ = 'user'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False)
+    email_verified = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def set_password(self, password):
+        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+
+    def check_password(self, password):
+        return bcrypt.check_password_hash(self.password_hash, password)
+
+    def to_dict(self):
+        return {'id': self.id, 'name': self.name, 'email': self.email, 'is_admin': self.is_admin}
+
+class Course(db.Model):
+    __tablename__ = 'course'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    image_url = db.Column(db.String(500))
+    price = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    modules = db.relationship('Module', backref='course', lazy=True, cascade='all, delete-orphan')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'image_url': self.image_url,
+            'price': self.price
+        }
+
+class Module(db.Model):
+    __tablename__ = 'module'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    order = db.Column(db.Integer, default=0)
+    lessons = db.relationship('Lesson', backref='module', lazy=True, cascade='all, delete-orphan')
+    quiz = db.relationship('Quiz', backref='module', uselist=False, cascade='all, delete-orphan')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'order': self.order,
+            'lessons': [l.to_dict() for l in self.lessons]
+        }
+
+class Lesson(db.Model):
+    __tablename__ = 'lesson'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text)
+    video_url = db.Column(db.String(500))
+    image_url = db.Column(db.String(500))
+    module_id = db.Column(db.Integer, db.ForeignKey('module.id'), nullable=False)
+    duration = db.Column(db.Integer, default=15)
+    order = db.Column(db.Integer, default=0)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'content': self.content,
+            'video_url': self.video_url,
+            'image_url': self.image_url,
+            'duration': self.duration,
+            'order': self.order
+        }
+
+class Quiz(db.Model):
+    __tablename__ = 'quiz'
+    id = db.Column(db.Integer, primary_key=True)
+    module_id = db.Column(db.Integer, db.ForeignKey('module.id'), nullable=False)
+    questions = db.Column(db.Text)
+    passing_score = db.Column(db.Integer, default=70)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'questions': json.loads(self.questions) if self.questions else [],
+            'passing_score': self.passing_score
+        }
+
+class UserProgress(db.Model):
+    __tablename__ = 'user_progress'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    completed = db.Column(db.Boolean, default=False)
+    completed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+# ========== ROUTES ==========
+@app.route('/api/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok'})
+
+@app.route('/api/courses', methods=['GET'])
+def get_courses():
+    courses = Course.query.all()
+    return jsonify([c.to_dict() for c in courses])
+
+@app.route('/api/courses/<int:course_id>', methods=['GET'])
+def get_course(course_id):
+    course = Course.query.get(course_id)
+    if not course:
+        return jsonify({'error': 'Course not found'}), 404
+    return jsonify(course.to_dict())
+
+@app.route('/api/courses/<int:course_id>/modules', methods=['GET'])
+def get_course_modules(course_id):
+    modules = Module.query.filter_by(course_id=course_id).order_by(Module.order).all()
+    return jsonify([m.to_dict() for m in modules])
+
+@app.route('/api/modules/<int:module_id>/lessons', methods=['GET'])
+def get_module_lessons(module_id):
+    lessons = Lesson.query.filter_by(module_id=module_id).order_by(Lesson.order).all()
+    return jsonify([l.to_dict() for l in lessons])
+
+@app.route('/api/modules/<int:module_id>/quiz', methods=['GET'])
+def get_module_quiz(module_id):
+    quiz = Quiz.query.filter_by(module_id=module_id).first()
+    if not quiz:
+        return jsonify({'error': 'No quiz for this module'}), 404
+    return jsonify(quiz.to_dict())
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'Email already exists'}), 400
+    user = User(name=data['name'], email=data['email'], email_verified=True)
+    user.set_password(data['password'])
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({'user': user.to_dict()}), 201
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    user = User.query.filter_by(email=data['email']).first()
+    if not user or not user.check_password(data['password']):
+        return jsonify({'error': 'Invalid credentials'}), 401
+    return jsonify({'user': user.to_dict()})
+
+# ========== INITIALISATION ==========
+with app.app_context():
+    db.create_all()
+    
+    # Créer l'admin s'il n'existe pas
+    if not User.query.filter_by(email='admin@grow.com').first():
+        admin = User(name='Admin', email='admin@grow.com', is_admin=True, email_verified=True)
+        admin.set_password('admin123')
+        db.session.add(admin)
+        db.session.commit()
+        print("✅ Admin créé: admin@grow.com / admin123")
+    
+    # Créer des cours de démo si la base est vide
+    if Course.query.count() == 0:
+        print("📚 Création des cours de démonstration...")
+        
+        # Cours 1: React Moderne
+        course1 = Course(
+            title='React Moderne 2025',
+            description='Maîtrisez React 19 avec des projets concrets',
+            image_url='https://images.pexels.com/photos/270404/pexels-photo-270404.jpeg'
+        )
+        db.session.add(course1)
+        db.session.commit()
+        
+        # Module 1
+        m1 = Module(title='Module 1: Introduction à React', course_id=course1.id, order=1)
+        db.session.add(m1)
+        db.session.commit()
+        
+        # Leçons du Module 1
+        Lesson(title='Qu\'est-ce que React ?', 
+               content='<h2>Bienvenue dans React</h2><p>React est une bibliothèque JavaScript créée par Facebook.</p><img src="https://reactjs.org/logo-og.png" style="width:200px"/>',
+               module_id=m1.id, order=1, duration=15)
+        Lesson(title='Composants et Props', 
+               content='<h2>Les composants React</h2><pre>function Welcome(props) {\n  return &lt;h1&gt;Bonjour {props.name}&lt;/h1&gt;;\n}</pre>',
+               module_id=m1.id, order=2, duration=20)
+        Lesson(title='State avec useState', 
+               content='<h2>Gérer l\'état</h2><pre>const [count, setCount] = useState(0);</pre>',
+               module_id=m1.id, order=3, duration=15)
+        
+        # Quiz Module 1
+        Quiz(module_id=m1.id, 
+             questions=json.dumps([
+                 {'question': 'Qu\'est-ce que React ?', 'options': ['Bibliothèque JS', 'Framework PHP', 'Base de données'], 'correct': 'Bibliothèque JS'},
+                 {'question': 'Hook pour gérer l\'état ?', 'options': ['useEffect', 'useState', 'useContext'], 'correct': 'useState'},
+                 {'question': 'Les props sont...', 'options': ['Mutables', 'Immutables', 'Variables'], 'correct': 'Immutables'}
+             ]),
+             passing_score=70)
+        
+        # Module 2
+        m2 = Module(title='Module 2: Hooks Avancés', course_id=course1.id, order=2)
+        db.session.add(m2)
+        db.session.commit()
+        
+        Lesson(title='useEffect en détail', 
+               content='<h2>useEffect</h2><pre>useEffect(() => {\n  document.title = `Compteur: ${count}`;\n}, [count]);</pre>',
+               module_id=m2.id, order=1, duration=20)
+        Lesson(title='useContext', 
+               content='<h2>useContext</h2><pre>const theme = useContext(ThemeContext);</pre>',
+               module_id=m2.id, order=2, duration=15)
+        
+        Quiz(module_id=m2.id,
+             questions=json.dumps([
+                 {'question': 'useEffect sert à ?', 'options': ['État local', 'Effets de bord', 'Rendu'], 'correct': 'Effets de bord'},
+                 {'question': 'useContext résout ?', 'options': ['Prop drilling', 'Performance', 'Styling'], 'correct': 'Prop drilling'}
+             ]),
+             passing_score=70)
+        
+        # Cours 2: UX/UI Design
+        course2 = Course(
+            title='UX/UI Design Masterclass',
+            description='Apprenez à concevoir des interfaces utilisateur exceptionnelles',
+            image_url='https://images.pexels.com/photos/196644/pexels-photo-196644.jpeg'
+        )
+        db.session.add(course2)
+        db.session.commit()
+        
+        m_ux = Module(title='Module 1: Principes du Design UX', course_id=course2.id, order=1)
+        db.session.add(m_ux)
+        db.session.commit()
+        
+        Lesson(title='Psychologie des couleurs',
+               content='<h2>Les couleurs en design</h2><p>Rouge = urgence, Bleu = confiance, Vert = succès</p>',
+               module_id=m_ux.id, order=1, duration=20)
+        Lesson(title='Wireframing',
+               content='<h2>Wireframing</h2><p>Le wireframe est l\'architecture de votre site.</p>',
+               module_id=m_ux.id, order=2, duration=25)
+        
+        Quiz(module_id=m_ux.id,
+             questions=json.dumps([
+                 {'question': 'Qu\'est-ce qu\'un wireframe ?', 'options': ['Design final', 'Schéma structurel', 'Code HTML'], 'correct': 'Schéma structurel'},
+                 {'question': 'Couleur de confiance ?', 'options': ['Rouge', 'Bleu', 'Vert'], 'correct': 'Bleu'}
+             ]),
+             passing_score=70)
+        
+        db.session.commit()
+        print("✅ Cours de démonstration créés avec succès !")
+    
+    print("✅ Base de données initialisée")
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
+
+# Route quiz corrigée (remplace l'ancienne)
+@app.route('/api/modules/<int:module_id>/quiz', methods=['GET'])
+def get_module_quiz(module_id):
+    quiz = Quiz.query.filter_by(module_id=module_id).first()
+    if not quiz:
+        return jsonify({'error': 'No quiz for this module'}), 404
+    return jsonify(quiz.to_dict())

@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import Cropper from 'react-easy-crop';
 import { 
   User, Mail, Phone, Briefcase, Code, MapPin, Calendar, Globe, 
   Edit2, Save, X, Camera, Award, Image, 
@@ -9,7 +8,7 @@ import {
 import api from '../services/api';
 import Sidebar from '../components/Sidebar';
 
-// Icônes SVG personnalisées (car lucide-react ne les a plus)
+// Icônes SVG personnalisées
 const TwitterIcon = ({ size = 14, color = '#60a5fa' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/>
@@ -65,16 +64,9 @@ function Profile() {
     averageScore: 0,
   });
 
-  // États pour le crop
-  const [cropModalOpen, setCropModalOpen] = useState(false);
-  const [imageToCrop, setImageToCrop] = useState(null);
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const fileInputRef = useRef(null);
   const coverInputRef = useRef(null);
 
-  // Chargement automatique des données du profil
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (!storedUser) {
@@ -85,7 +77,6 @@ function Profile() {
     const userData = JSON.parse(storedUser);
     setUser(userData);
     
-    // Charger toutes les informations du profil
     const savedProfile = localStorage.getItem(`userProfile_${userData.id}`);
     if (savedProfile) {
       const profileData = JSON.parse(savedProfile);
@@ -107,30 +98,12 @@ function Profile() {
         coverPhoto: profileData.coverPhoto || '',
       });
     } else {
-      setFormData({
-        name: userData.name || '',
-        email: userData.email || '',
-        phone: '',
-        bio: '',
-        occupation: '',
-        skills: '',
-        address: '',
-        city: '',
-        country: '',
-        birthDate: '',
-        website: '',
-        twitter: '',
-        linkedin: '',
-        github: '',
-        coverPhoto: '',
-      });
+      setFormData(prev => ({ ...prev, name: userData.name || '', email: userData.email || '' }));
     }
     
-    // Charger la photo unique de l'utilisateur
     const savedPhoto = localStorage.getItem(`userPhoto_${userData.id}`);
     if (savedPhoto) setProfilePhoto(savedPhoto);
     
-    // Charger la cover photo
     const savedCover = localStorage.getItem(`userCover_${userData.id}`);
     if (savedCover) setCoverPhoto(savedCover);
     
@@ -142,7 +115,6 @@ function Profile() {
       const enrollmentsRes = await api.getUserEnrollments(userId);
       const enrollmentsData = enrollmentsRes.data;
       
-      // Enrichir avec la progression réelle
       const enrichedEnrollments = [];
       let totalLessonsAll = 0;
       let completedLessonsAll = 0;
@@ -206,7 +178,6 @@ function Profile() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Gestion de la cover photo
   const handleCoverChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -221,65 +192,20 @@ function Profile() {
     }
   };
 
-  // Gestion du fichier sélectionné (avatar)
+  // Version simplifiée SANS crop
   const onFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = () => {
-        setImageToCrop(reader.result);
-        setCropModalOpen(true);
+        setProfilePhoto(reader.result);
+        localStorage.setItem(`userPhoto_${user.id}`, reader.result);
+        setMessage({ type: 'success', text: 'Photo mise à jour !' });
+        setTimeout(() => setMessage(null), 3000);
+        window.dispatchEvent(new Event('userPhotoUpdated'));
+        window.dispatchEvent(new Event('storage'));
       };
       reader.readAsDataURL(file);
-    }
-  };
-
-  const onCropComplete = (croppedArea, croppedAreaPixels) => {
-    setCroppedAreaPixels(croppedAreaPixels);
-  };
-
-  const getCroppedImg = async (imageSrc, pixelCrop) => {
-    const image = new Image();
-    image.src = imageSrc;
-    await new Promise((resolve) => {
-      image.onload = resolve;
-    });
-    
-    const canvas = document.createElement('canvas');
-    canvas.width = pixelCrop.width;
-    canvas.height = pixelCrop.height;
-    const ctx = canvas.getContext('2d');
-    
-    ctx.drawImage(
-      image,
-      pixelCrop.x,
-      pixelCrop.y,
-      pixelCrop.width,
-      pixelCrop.height,
-      0,
-      0,
-      pixelCrop.width,
-      pixelCrop.height
-    );
-    
-    return canvas.toDataURL('image/jpeg');
-  };
-
-  const saveCroppedImage = async () => {
-    try {
-      const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
-      setProfilePhoto(croppedImage);
-      localStorage.setItem(`userPhoto_${user.id}`, croppedImage);
-      setCropModalOpen(false);
-      setImageToCrop(null);
-      setMessage({ type: 'success', text: 'Photo mise à jour !' });
-      setTimeout(() => setMessage(null), 3000);
-      window.dispatchEvent(new Event('userPhotoUpdated'));
-      window.dispatchEvent(new Event('storage'));
-    } catch (err) {
-      console.error('Erreur crop', err);
-      setMessage({ type: 'error', text: 'Erreur lors du recadrage' });
-      setTimeout(() => setMessage(null), 3000);
     }
   };
 
@@ -375,7 +301,6 @@ function Profile() {
     padding: '1rem',
   };
 
-  // Cover styles
   const coverContainerStyle = {
     position: 'relative',
     width: '100%',
@@ -540,35 +465,6 @@ function Profile() {
     gap: '0.8rem',
   };
 
-  const modalStyle = {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: 'rgba(0,0,0,0.9)',
-    zIndex: 2000,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  };
-
-  const modalContentStyle = {
-    width: '90%',
-    maxWidth: '500px',
-    background: '#1e293b',
-    borderRadius: '1rem',
-    overflow: 'hidden',
-    position: 'relative',
-  };
-
-  const cropContainerStyle = {
-    position: 'relative',
-    width: '100%',
-    height: '300px',
-    background: '#0f172a',
-  };
-
   if (loading) {
     return (
       <div style={pageStyle}>
@@ -587,9 +483,8 @@ function Profile() {
         <div style={layoutStyle}>
           <Sidebar />
           <div style={mainStyle}>
-            {/* En-tête du profil AVEC COVER */}
+            {/* En-tête du profil avec COVER */}
             <div style={cardStyle}>
-              {/* Cover Photo */}
               <div style={coverContainerStyle}>
                 {coverPhoto && <img src={coverPhoto} alt="Cover" style={coverImageStyle} />}
                 <div style={coverOverlayStyle} />
@@ -605,7 +500,6 @@ function Profile() {
                 />
               </div>
               
-              {/* Avatar et nom */}
               <div style={{ ...cardContentStyle, textAlign: 'center', paddingTop: '0.5rem' }}>
                 <div style={avatarContainerStyle}>
                   <img
@@ -812,29 +706,6 @@ function Profile() {
           </div>
         </div>
       </div>
-
-      {/* Modal de recadrage */}
-      {cropModalOpen && imageToCrop && (
-        <div style={modalStyle}>
-          <div style={modalContentStyle}>
-            <div style={cropContainerStyle}>
-              <Cropper
-                image={imageToCrop}
-                crop={crop}
-                zoom={zoom}
-                aspect={1}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-                onCropComplete={onCropComplete}
-              />
-            </div>
-            <div style={{ padding: '0.8rem', display: 'flex', gap: '0.8rem', justifyContent: 'flex-end' }}>
-              <button style={buttonSecondaryStyle} onClick={() => { setCropModalOpen(false); setImageToCrop(null); }}>Cancel</button>
-              <button style={buttonStyle} onClick={saveCroppedImage}>Apply</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

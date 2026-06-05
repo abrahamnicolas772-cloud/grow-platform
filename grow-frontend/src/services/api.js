@@ -1,66 +1,49 @@
-cd ~/grow-platform
-# Modifier le premier
-cat > src/services/api.js << 'ENDOFFILE'
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || '/api';
+// URL de l'API Render en production, ou localhost en développement
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://grow-platform.onrender.com/api'
+  : 'http://localhost:5000/api';
 
 const api = {
+  // ========== AUTH ==========
   register: (userData) => axios.post(`${API_URL}/register`, userData),
   login: (credentials) => axios.post(`${API_URL}/login`, credentials),
-  verifyEmail: (data) => axios.post(`${API_URL}/verify-email`, data),
-  forgotPassword: (data) => axios.post(`${API_URL}/forgot-password`, data),
-  resetPassword: (data) => axios.post(`${API_URL}/reset-password`, data),
-  getUsers: () => axios.get(`${API_URL}/users`),
+  getCurrentUser: () => axios.get(`${API_URL}/me`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+  }),
+
+  // ========== COURSES ==========
   getCourses: () => axios.get(`${API_URL}/courses`),
-  getCourse: (courseId) => axios.get(`${API_URL}/courses/${courseId}`),
+  getCourse: (id) => axios.get(`${API_URL}/courses/${id}`),
   getCourseModules: (courseId) => axios.get(`${API_URL}/courses/${courseId}/modules`),
-  getModuleLessons: (moduleId) => axios.get(`${API_URL}/courses/modules/${moduleId}/lessons`),
-  enrollCourse: (userId, courseId, paymentMethod) =>
-    axios.post(`${API_URL}/enroll`, { user_id: userId, course_id: courseId, payment_method: paymentMethod }),
-  checkout: (data) => axios.post(`${API_URL}/checkout`, data),
-  getTransactions: (userId) => axios.get(`${API_URL}/transactions/${userId}`),
-  getUserEnrollments: (userId) => axios.get(`${API_URL}/mycourses?user_id=${userId}`),
-  getQuiz: (lessonId) => axios.get(`${API_URL}/quiz?lesson_id=${lessonId}`),
-  submitQuiz: (userId, lessonId, answer) =>
-    axios.post(`${API_URL}/quiz/submit`, { user_id: userId, lesson_id: lessonId, answer }),
-  getProgress: (userId, courseId) =>
-    axios.get(`${API_URL}/quiz/progress/${userId}/${courseId}`),
-  get: (url) => axios.get(url),
+  getModuleLessons: (moduleId) => axios.get(`${API_URL}/modules/${moduleId}/lessons`),
+  enrollCourse: (userId, courseId, paymentMethod) => 
+    axios.post(`${API_URL}/enroll`, { userId, courseId, paymentMethod }),
+
+  // ========== USER ENROLLMENTS ==========
+  getUserEnrollments: (userId) => axios.get(`${API_URL}/users/${userId}/enrollments`),
+
+  // ========== QUIZ (classique QCM) ==========
+  getQuiz: (lessonId) => axios.get(`${API_URL}/quiz/${lessonId}`),
+  submitQuiz: (userId, lessonId, answer) => 
+    axios.post(`${API_URL}/quiz/submit`, { userId, lessonId, answer }),
+
+  // ========== QUIZ CODE (nouveau) ==========
+  submitCodeQuiz: (userId, lessonId, code, isCorrect) => 
+    axios.post(`${API_URL}/quiz/code-submit`, { userId, lessonId, code, isCorrect }),
+
+  // ========== ASSIGNMENTS (devoirs) ==========
+  submitAssignment: (formData) => 
+    axios.post(`${API_URL}/assignments/submit`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+  getUserAssignments: (userId, courseId) => 
+    axios.get(`${API_URL}/assignments/user/${userId}/course/${courseId}`),
+
+  // ========== CERTIFICATE ==========
+  getCertificate: (userId, courseId) => 
+    axios.get(`${API_URL}/certificate/${userId}/${courseId}`),
 };
 
 export default api;
-ENDOFFILE
-
-# Modifier le deuxième (dans grow-frontend)
-cat > grow-frontend/src/services/api.js << 'ENDOFFILE'
-import axios from 'axios';
-
-const API_URL = process.env.REACT_APP_API_URL || '/api';
-
-const api = {
-  register: (userData) => axios.post(`${API_URL}/register`, userData),
-  login: (credentials) => axios.post(`${API_URL}/login`, credentials),
-  verifyEmail: (data) => axios.post(`${API_URL}/verify-email`, data),
-  forgotPassword: (data) => axios.post(`${API_URL}/forgot-password`, data),
-  resetPassword: (data) => axios.post(`${API_URL}/reset-password`, data),
-  getUsers: () => axios.get(`${API_URL}/users`),
-  getCourses: () => axios.get(`${API_URL}/courses`),
-  getCourse: (courseId) => axios.get(`${API_URL}/courses/${courseId}`),
-  getCourseModules: (courseId) => axios.get(`${API_URL}/courses/${courseId}/modules`),
-  getModuleLessons: (moduleId) => axios.get(`${API_URL}/courses/modules/${moduleId}/lessons`),
-  enrollCourse: (userId, courseId, paymentMethod) =>
-    axios.post(`${API_URL}/enroll`, { user_id: userId, course_id: courseId, payment_method: paymentMethod }),
-  checkout: (data) => axios.post(`${API_URL}/checkout`, data),
-  getTransactions: (userId) => axios.get(`${API_URL}/transactions/${userId}`),
-  getUserEnrollments: (userId) => axios.get(`${API_URL}/mycourses?user_id=${userId}`),
-  getQuiz: (lessonId) => axios.get(`${API_URL}/quiz?lesson_id=${lessonId}`),
-  submitQuiz: (userId, lessonId, answer) =>
-    axios.post(`${API_URL}/quiz/submit`, { user_id: userId, lesson_id: lessonId, answer }),
-  getProgress: (userId, courseId) =>
-    axios.get(`${API_URL}/quiz/progress/${userId}/${courseId}`),
-  get: (url) => axios.get(url),
-};
-
-export default api;
-ENDOFFILE
