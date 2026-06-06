@@ -1,9 +1,19 @@
 {
-  "buildCommand": "cd grow-frontend && npm install --legacy-peer-deps && CI=false npm run build",
-  "outputDirectory": "grow-frontend/build",
-  "installCommand": "npm install --legacy-peer-deps",
-  "framework": "create-react-app",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/grow-frontend/build/index.html" }
+  "version": 2,
+  "builds": [
+    {
+      "src": "grow-frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build",
+        "buildCommand": "cd grow-frontend && npm install --legacy-peer-deps && npm run build"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/grow-frontend/build/$1"
+    }
   ]
 }
