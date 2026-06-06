@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-// URL de l'API - changer ici pour la production
 const API_URL = 'https://grow-platform.onrender.com/api';
 
 const api = axios.create({
@@ -10,27 +9,9 @@ const api = axios.create({
   },
 });
 
-// Intercepteur pour ajouter le token si besoin
-api.interceptors.request.use(
-  (config) => {
-    const user = localStorage.getItem('user');
-    if (user) {
-      try {
-        const userData = JSON.parse(user);
-        if (userData.token) {
-          config.headers.Authorization = `Bearer ${userData.token}`;
-        }
-      } catch (e) {}
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
 // Auth
 export const register = (userData) => api.post('/register', userData);
 export const login = (credentials) => api.post('/login', credentials);
-export const getCurrentUser = () => api.get('/me');
 
 // Courses
 export const getCourses = () => api.get('/courses');
@@ -39,27 +20,14 @@ export const getCourseModules = (courseId) => api.get(`/courses/${courseId}/modu
 export const getModuleLessons = (moduleId) => api.get(`/modules/${moduleId}/lessons`);
 
 // Enrollments
-export const enrollCourse = (userId, courseId, paymentMethod) => 
-  api.post('/enroll', { userId, courseId, paymentMethod });
 export const getUserEnrollments = (userId) => api.get(`/users/${userId}/enrollments`);
+export const enrollCourse = (userId, courseId) => api.post('/enroll', { userId, courseId });
 
 // Quiz
 export const getQuiz = (lessonId) => api.get(`/quiz/${lessonId}`);
-export const submitQuiz = (userId, lessonId, answer) => 
-  api.post('/quiz/submit', { userId, lessonId, answer });
-export const submitCodeQuiz = (userId, lessonId, code, isCorrect) => 
-  api.post('/quiz/code-submit', { userId, lessonId, code, isCorrect });
-
-// Assignments
-export const submitAssignment = (formData) => 
-  api.post('/assignments/submit', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  });
-export const getUserAssignments = (userId, courseId) => 
-  api.get(`/assignments/user/${userId}/course/${courseId}`);
+export const submitQuiz = (userId, lessonId, answer) => api.post('/quiz/submit', { userId, lessonId, answer });
 
 // Certificate
-export const getCertificate = (userId, courseId) => 
-  api.get(`/certificate/${userId}/${courseId}`);
+export const getCertificate = (userId, courseId) => api.get(`/certificate/${userId}/${courseId}`);
 
 export default api;
